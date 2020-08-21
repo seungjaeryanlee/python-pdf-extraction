@@ -1,0 +1,880 @@
+PublishedasaconferencepaperatICLR2015
+ADAM: A METHOD FOR STOCHASTIC OPTIMIZATION
+DiederikP.Kingma* JimmyLeiBa∗
+UniversityofAmsterdam,OpenAI UniversityofToronto
+dpkingma@openai.com jimmy@psi.utoronto.ca
+ABSTRACT
+7 We introduce Adam, an algorithm for ﬁrst-order gradient-based optimization of
+1 stochastic objective functions, based on adaptive estimates of lower-order mo-
+0 ments. Themethodisstraightforwardtoimplement,iscomputationallyefﬁcient,
+2 haslittlememoryrequirements,isinvarianttodiagonalrescalingofthegradients,
+ 
+n andiswellsuitedforproblemsthatarelargeintermsofdataand/orparameters.
+a The method is also appropriate for non-stationary objectives and problems with
+J verynoisyand/orsparsegradients. Thehyper-parametershaveintuitiveinterpre-
+ 
+0 tationsandtypicallyrequirelittletuning.Someconnectionstorelatedalgorithms,
+3 onwhichAdamwasinspired,arediscussed. Wealsoanalyzethetheoreticalcon-
+  vergence properties of the algorithm and provide a regret bound on the conver-
+ 
+] gence rate that is comparable to the best known results under the online convex
+G
+optimizationframework. EmpiricalresultsdemonstratethatAdamworkswellin
+L practiceandcomparesfavorablytootherstochasticoptimizationmethods.Finally,
+. wediscussAdaMax,avariantofAdambasedontheinﬁnitynorm.
+s
+c
+[
+ 
+  1 INTRODUCTION
+9
+v Stochasticgradient-basedoptimizationisofcorepracticalimportanceinmanyﬁeldsofscienceand
+0
+engineering.Manyproblemsintheseﬁeldscanbecastastheoptimizationofsomescalarparameter-
+8
+izedobjectivefunctionrequiringmaximizationorminimizationwithrespecttoitsparameters.Ifthe
+9
+functionisdifferentiablew.r.t. itsparameters,gradientdescentisarelativelyefﬁcientoptimization
+6
+method,sincethecomputationofﬁrst-orderpartialderivativesw.r.t.alltheparametersisofthesame
+.
+2 computationalcomplexityasjustevaluatingthefunction. Often,objectivefunctionsarestochastic.
+1 Forexample,manyobjectivefunctionsarecomposedofasumofsubfunctionsevaluatedatdifferent
+4 subsamples of data; in this case optimization can be made more efﬁcient by taking gradient steps
+1 w.r.t. individualsubfunctions,i.e. stochasticgradientdescent(SGD)orascent. SGDproveditself
+:
+v asanefﬁcientandeffectiveoptimizationmethodthatwascentralinmanymachinelearningsuccess
+i stories,suchasrecentadvancesindeeplearning(Dengetal.,2013;Krizhevskyetal.,2012;Hinton
+X
+&Salakhutdinov,2006;Hintonetal.,2012a;Gravesetal.,2013). Objectivesmayalsohaveother
+r sourcesofnoisethandatasubsampling,suchasdropout(Hintonetal.,2012b)regularization. For
+a
+allsuchnoisyobjectives,efﬁcientstochasticoptimizationtechniquesarerequired.Thefocusofthis
+paper is on the optimization of stochastic objectives with high-dimensional parameters spaces. In
+these cases, higher-order optimization methods are ill-suited, and discussion in this paper will be
+restrictedtoﬁrst-ordermethods.
+WeproposeAdam,amethodforefﬁcientstochasticoptimizationthatonlyrequiresﬁrst-ordergra-
+dientswithlittlememoryrequirement. Themethodcomputesindividualadaptivelearningratesfor
+differentparametersfromestimatesofﬁrstandsecondmomentsofthegradients; thenameAdam
+is derived from adaptive moment estimation. Our method is designed to combine the advantages
+oftworecentlypopularmethods: AdaGrad(Duchietal.,2011),whichworkswellwithsparsegra-
+dients,andRMSProp(Tieleman&Hinton,2012),whichworkswellinon-lineandnon-stationary
+settings; important connections to these and other stochastic optimization methods are clariﬁed in
+section5.SomeofAdam’sadvantagesarethatthemagnitudesofparameterupdatesareinvariantto
+rescaling of the gradient, its stepsizes are approximately bounded by the stepsize hyperparameter,
+itdoesnotrequireastationaryobjective,itworkswithsparsegradients,anditnaturallyperformsa
+formofstepsizeannealing.
+∗Equalcontribution.AuthororderingdeterminedbycoinﬂipoveraGoogleHangout.
+1PublishedasaconferencepaperatICLR2015
+Algorithm1:Adam,ourproposedalgorithmforstochasticoptimization. Seesection2fordetails,
+andforaslightlymoreefﬁcient(butlessclear)orderofcomputation. g2 indicatestheelementwise
+t
+square g g . Good default settings for the tested machine learning problems are α = 0.001,
+t t
+β = 0.9,(cid:12)β = 0.999and(cid:15) = 10 8. Alloperationsonvectorsareelement-wise. Withβt andβt
+1 2 − 1 2
+wedenoteβ andβ tothepowert.
+1 2
+Require: α: Stepsize
+Require: β1,β2 [0,1): Exponentialdecayratesforthemomentestimates
+∈
+Require: f(θ): Stochasticobjectivefunctionwithparametersθ
+Require: θ0: Initialparametervector
+m 0(Initialize1stmomentvector)
+0
+v ←0(Initialize2ndmomentvector)
+0
+←
+t 0(Initializetimestep)
+←
+whileθtnotconvergeddo
+t t+1
+←
+g f (θ )(Getgradientsw.r.t. stochasticobjectiveattimestept)
+t θ t t 1
+m←∇β m− +(1 β ) g (Updatebiasedﬁrstmomentestimate)
+t 1 t 1 1 t
+v ←β ·v −+(1 −β ) g·2(Updatebiasedsecondrawmomentestimate)
+mt ← m2·/(t1−1 βt)(−Com2p·utetbias-correctedﬁrstmomentestimate)
+v t ←v /t(1 −βt)1(Computebias-correctedsecondrawmomentestimate)
+t ← t − 2
+θ θ α m /(√v +(cid:15))(Updateparameters)
+bt t 1 t t
+← − − ·
+endbwhile
+return θt(Resultinbgparambeters)
+In section 2 we describe the algorithm and the properties of its update rule. Section 3 explains
+ourinitializationbiascorrectiontechnique,andsection4providesatheoreticalanalysisofAdam’s
+convergenceinonlineconvexprogramming.Empirically,ourmethodconsistentlyoutperformsother
+methodsforavarietyofmodelsanddatasets,asshowninsection6. Overall,weshowthatAdamis
+aversatilealgorithmthatscalestolarge-scalehigh-dimensionalmachinelearningproblems.
+2 ALGORITHM
+See algorithm 1 for pseudo-code of our proposed algorithm Adam. Let f(θ) be a noisy objec-
+tive function: a stochastic scalar function that is differentiable w.r.t. parameters θ. We are in-
+terested in minimizing the expected value of this function, E[f(θ)] w.r.t. its parameters θ. With
+f (θ),...,,f (θ) we denote the realisations of the stochastic function at subsequent timesteps
+1 T
+1,...,T. The stochasticity might come from the evaluation at random subsamples (minibatches)
+ofdatapoints,orarisefrominherentfunctionnoise. Withg = f (θ)wedenotethegradient,i.e.
+t θ t
+∇
+thevectorofpartialderivativesoff ,w.r.tθevaluatedattimestept.
+t
+Thealgorithmupdatesexponentialmovingaveragesofthegradient(m )andthesquaredgradient
+t
+(v )wherethehyper-parametersβ ,β [0,1)controltheexponentialdecayratesofthesemoving
+t 1 2
+averages. The moving averages thems∈elves are estimates of the 1st moment (the mean) and the
+2nd raw moment (the uncentered variance) of the gradient. However, these moving averages are
+initializedas(vectorsof)0’s,leadingtomomentestimatesthatarebiasedtowardszero,especially
+duringtheinitialtimesteps,andespeciallywhenthedecayratesaresmall(i.e.theβsarecloseto1).
+Thegoodnewsisthatthisinitializationbiascanbeeasilycounteracted,resultinginbias-corrected
+estimatesm andv . Seesection3formoredetails.
+t t
+Notethattheefﬁciencyofalgorithm1can,attheexpenseofclarity,beimproveduponbychanging
+theorderobfcompbutation,e.g. byreplacingthelastthreelinesintheloopwiththefollowinglines:
+α =α 1 βt/(1 βt)andθ θ α m /(√v +(cid:15)ˆ).
+t · − 2 − 1 t ← t−1− t· t t
+p
+2.1 ADAM’SUPDATERULE
+AnimportantpropertyofAdam’supdateruleisitscarefulchoiceofstepsizes.Assuming(cid:15)=0,the
+effectivesteptakeninparameterspaceattimesteptis∆ =α m /√v .Theeffectivestepsizehas
+t t t
+·
+twoupperbounds: ∆ α (1 β )/√1 β inthecase(1 β ) > √1 β ,and ∆ α
+t 1 2 1 2 t
+| | ≤ · − − − − | | ≤
+b b
+2PublishedasaconferencepaperatICLR2015
+otherwise. The ﬁrst case only happens in the most severe case of sparsity: when a gradient has
+beenzeroatalltimestepsexceptatthecurrenttimestep. Forlesssparsecases,theeffectivestepsize
+will be smaller. When (1 β ) = √1 β we have that m /√v < 1 therefore ∆ < α. In
+1 2 t t t
+− − | | | |
+morecommonscenarios,wewillhavethatmt/√vt 1since E[g]/ E[g2] 1. Theeffective
+≈± | |≤
+magnitude of the steps taken in parameter space at each timbestepbare approximately bounded by
+p
+thestepsizesettingα,i.e.,|∆t| / α. Thiscbanbebunderstoodasestablishingatrustregionaround
+thecurrentparametervalue,beyondwhichthecurrentgradientestimatedoesnotprovidesufﬁcient
+information. This typically makes it relatively easy to know the right scale of α in advance. For
+manymachinelearningmodels,forinstance,weoftenknowinadvancethatgoodoptimaarewith
+high probability within some set region in parameter space; it is not uncommon, for example, to
+have a prior distribution over the parameters. Since α sets (an upper bound of) the magnitude of
+stepsinparameterspace, wecanoftendeducetherightorderofmagnitudeofαsuchthatoptima
+can be reached from θ within some number of iterations. With a slight abuse of terminology,
+0
+we will call the ratio m /√v the signal-to-noise ratio (SNR). With a smaller SNR the effective
+t t
+stepsize ∆ will be closer to zero. This is a desirable property, since a smaller SNR means that
+t
+thereisgreateruncertaintyaboutwhetherthedirectionofm correspondstothedirectionofthetrue
+b b t
+gradient. Forexample, theSNRvaluetypicallybecomescloserto0towardsanoptimum, leading
+tosmallereffectivestepsinparameterspace: aformofautomaticannealing. Theeffectivestepsize
+b
+∆ isalsoinvarianttothescaleofthegradients;rescalingthegradientsgwithfactorcwillscalem
+t t
+withafactorcandv withafactorc2,whichcancelout: (c m )/(√c2 v )=m /√v .
+t t t t t
+· ·
+b
+b b b b b
+3 INITIALIZATION BIAS CORRECTION
+As explained in section 2, Adam utilizes initialization bias correction terms. We will here derive
+thetermforthesecondmomentestimate;thederivationfortheﬁrstmomentestimateiscompletely
+analogous. Letg bethegradientofthestochasticobjectivef, andwewishtoestimateitssecond
+raw moment (uncentered variance) using an exponential moving average of the squared gradient,
+with decay rate β . Let g ,...,g be the gradients at subsequent timesteps, each a draw from an
+2 1 T
+underlying gradient distribution g p(g ). Let us initialize the exponential moving average as
+t t
+∼
+v =0(avectorofzeros).Firstnotethattheupdateattimesteptoftheexponentialmovingaverage
+0
+v =β v +(1 β ) g2(whereg2indicatestheelementwisesquareg g )canbewrittenas
+atfunct2io·not−f1thegra−dien2ts·attallprevioutstimesteps: t(cid:12) t
+t
+vt =(1−β2) β2t−i·gi2 (1)
+i=1
+X
+We wish to know how E[vt], the expected value of the exponential moving average at timestep t,
+relates to the true second moment E[gt2], so we can correct for the discrepancy between the two.
+Takingexpectationsoftheleft-handandright-handsidesofeq.(1):
+t
+E[vt]=E"(1−β2) β2t−i·gi2# (2)
+i=1
+X
+t
+=E[gt2]·(1−β2) β2t−i+ζ (3)
+i=1
+X
+=E[gt2]·(1−β2t)+ζ (4)
+where ζ = 0 if the true second moment E[g2] is stationary; otherwise ζ can be kept small since
+i
+theexponentialdecayrateβ can(andshould)bechosensuchthattheexponentialmovingaverage
+1
+assigns small weights to gradients too far in the past. What is left is the term (1 βt) which is
+− 2
+caused by initializing the running average with zeros. In algorithm 1 we therefore divide by this
+termtocorrecttheinitializationbias.
+Incaseofsparsegradients,forareliableestimateofthesecondmomentoneneedstoaverageover
+manygradientsbychosingasmallvalueofβ ;howeveritisexactlythiscaseofsmallβ wherea
+2 2
+lackofinitialisationbiascorrectionwouldleadtoinitialstepsthataremuchlarger.
+3PublishedasaconferencepaperatICLR2015
+4 CONVERGENCE ANALYSIS
+WeanalyzetheconvergenceofAdamusingtheonlinelearningframeworkproposedin(Zinkevich,
+2003). Givenanarbitrary, unknownsequenceofconvexcostfunctionsf (θ), f (θ),..., f (θ). At
+1 2 T
+each time t, our goal is to predict the parameter θ and evaluate it on a previously unknown cost
+t
+function f . Since the nature of the sequence is unknown in advance, we evaluate our algorithm
+t
+usingtheregret,thatisthesumofallthepreviousdifferencebetweentheonlinepredictionf (θ )
+t t
+andthebestﬁxedpointparameterf (θ )fromafeasibleset foralltheprevioussteps.Concretely,
+t ∗
+X
+theregretisdeﬁnedas:
+T
+R(T)= [ft(θt) ft(θ∗)] (5)
+−
+t=1
+X
+whereθ =argmin T f (θ).WeshowAdamhasO(√T)regretboundandaproofisgiven
+∗ θ t=1 t
+intheappendix. Our∈rXesultiscomparabletothebestknownboundforthisgeneralconvexonline
+P
+learningproblem. Wealsousesomedeﬁnitionssimplifyournotation,wheregt , ft(θt)andgt,i
+∇
+astheith element. Wedeﬁneg1:t,i Rt asavectorthatcontainstheith dimensionofthegradients
+∈
+over all iterations till t, g1:t,i = [g1,i,g2,i,··· ,gt,i]. Also, we deﬁne γ , √ββ122. Our following
+theorem holds when the learning rate αt is decaying at a rate of t−12 and ﬁrst moment running
+averagecoefﬁcientβ decayexponentiallywithλ,thatistypicallycloseto1,e.g. 1 10 8.
+1,t −
+−
+Theorem4.1. Assumethatthefunctionfthasboundedgradients, ft(θ) 2 G, ft(θ)
+G forallθ Rdanddistancebetweenanyθ generatedbyAdamk∇isbounkded≤, θ k∇θ k∞D≤,
+t n m 2
+θ∞ θ ∈ D foranym,n 1,...,T ,andβ ,β [0,1)satisfy β12 k< 1−. Letαk ≤= α
+k m− nk∞ ≤ ∞ ∈ { } 1 2 ∈ √β2 t √t
+andβ =β λt 1,λ (0,1). Adamachievesthefollowingguarantee,forallT 1.
+1,t 1 −
+∈ ≥
+D2 d α(1+β )G d d D2 G √1 β
+R(T)≤ 2α(1 β ) TvT,i+(1 β )√1 1β (∞1 γ)2 kg1:T,ik2+ 2α(∞1 ∞β )(1− λ2)2
+− 1 i=1 − 1 − 2 − i=1 i=1 − 1 −
+Xp X X
+b
+Our Theorem 4.1 implies when the data features are sparse and bounded gradients, the sum-
+mation term can be much smaller than its upper bound d g << dG √T and
+d Tv <<dG √T,inparticulariftheclassoffunctioni=an1dkda1t:Ta,fieka2turesareint∞heformof
+Psecit=io1np1.2iTn,(iDuchiet∞al.,2011).TheirresultsfortheexpectePdvalueE[ di=1kg1:T,ik2]alsoapply
+toAdam. Ibnparticular,theadaptivemethod,suchasAdamandAdagrad,canachieveO(logd√T),
+P
+animprovementoverO(√dT)forthenon-adaptivemethod. Decayingβ towardszeroisimpor-
+1,t
+tantinourtheoreticalanalysisandalsomatchespreviousempiricalﬁndings,e.g. (Sutskeveretal.,
+2013)suggestsreducingthemomentumcoefﬁcientintheendoftrainingcanimproveconvergence.
+Finally,wecanshowtheaverageregretofAdamconverges,
+Corollary4.2. Assumethatthefunctionfthasboundedgradients, ft(θ) 2 G, ft(θ)
+G forallθ Rdanddistancebetweenanyθ generatedbyAdamk∇isbounkded≤, θ k∇θ k∞D≤,
+t n m 2
+θ∞ θ ∈ D for any m,n 1,...,T . Adam achieves the followingkguar−anteek, fo≤r all
+m n
+kT −1. k∞ ≤ ∞ ∈ { }
+≥ R(T) 1
+=O( )
+T √T
+This result can be obtained by using Theorem 4.1 and d g dG √T. Thus,
+lim R(T) =0. i=1k 1:T,ik2 ≤ ∞
+T→∞ T P
+5 RELATED WORK
+OptimizationmethodsbearingadirectrelationtoAdamareRMSProp(Tieleman&Hinton,2012;
+Graves, 2013) and AdaGrad (Duchi et al., 2011); these relationships are discussed below. Other
+stochasticoptimizationmethodsincludevSGD(Schauletal.,2012),AdaDelta(Zeiler,2012)andthe
+naturalNewtonmethodfromRoux&Fitzgibbon(2010),allsettingstepsizesbyestimatingcurvature
+4PublishedasaconferencepaperatICLR2015
+fromﬁrst-orderinformation. TheSum-of-FunctionsOptimizer(SFO)(Sohl-Dicksteinetal.,2014)
+isaquasi-Newtonmethodbasedonminibatches,but(unlikeAdam)hasmemoryrequirementslinear
+inthenumberofminibatchpartitionsofadataset,whichisofteninfeasibleonmemory-constrained
+systems such as a GPU. Like natural gradient descent (NGD) (Amari, 1998), Adam employs a
+preconditionerthatadaptstothegeometryofthedata,sincev isanapproximationtothediagonal
+t
+oftheFisherinformationmatrix(Pascanu&Bengio,2013);however,Adam’spreconditioner(like
+AdaGrad’s)ismoreconservativeinitsadaptionthanvanillaNGDbypreconditioningwiththesquare
+b
+rootoftheinverseofthediagonalFisherinformationmatrixapproximation.
+RMSProp: An optimization method closely related to Adam is RMSProp (Tieleman & Hinton,
+2012).Aversionwithmomentumhassometimesbeenused(Graves,2013).Thereareafewimpor-
+tantdifferencesbetweenRMSPropwithmomentumandAdam: RMSPropwithmomentumgener-
+atesitsparameterupdatesusingamomentumontherescaledgradient,whereasAdamupdatesare
+directly estimated using a running average of ﬁrst and second moment of the gradient. RMSProp
+alsolacksabias-correctionterm; thismattersmostincaseofavalueofβ closeto1(requiredin
+2
+caseofsparsegradients),sinceinthatcasenotcorrectingthebiasleadstoverylargestepsizesand
+oftendivergence,aswealsoempiricallydemonstrateinsection6.4.
+AdaGrad: AnalgorithmthatworkswellforsparsegradientsisAdaGrad(Duchietal.,2011). Its
+basicversionupdatesparametersasθ =θ α g / t g2.Notethatifwechooseβ tobe
+t+1 t− · t i=1 t 2
+inﬁnitesimallycloseto1frombelow,thenlim v =qt 1 t g2. AdaGradcorrespondstoa
+versionofAdamwithβ =0,inﬁnitesimal(1β2→β1)atndaP−rep·laceim=1enttofαbyanannealedversion
+1 2
+− P
+α =α t 1/2,namelyθ α t 1/2 m / lim b v =θ α t 1/2 g / t 1 t g2 =
+t · − t− · − · t β2→1 t t− · − · t − · i=1 t
+θ α g / t g2. Note that this dirpect correspondence between Adamqand AdPagrad does
+t − · t i=1 t b b
+notholdwheqnrPemovingthebias-correctionterms;withoutbiascorrection,likeinRMSProp,aβ2
+inﬁnitesimallycloseto1wouldleadtoinﬁnitelylargebias,andinﬁnitelylargeparameterupdates.
+6 EXPERIMENTS
+To empirically evaluate the proposed method, we investigated different popular machine learning
+models,includinglogisticregression,multilayerfullyconnectedneuralnetworksanddeepconvolu-
+tionalneuralnetworks.Usinglargemodelsanddatasets,wedemonstrateAdamcanefﬁcientlysolve
+practicaldeeplearningproblems.
+We use the same parameter initialization when comparing different optimization algorithms. The
+hyper-parameters, such as learning rate and momentum, are searched over a dense grid and the
+resultsarereportedusingthebesthyper-parametersetting.
+6.1 EXPERIMENT: LOGISTICREGRESSION
+WeevaluateourproposedmethodonL2-regularizedmulti-classlogisticregressionusingtheMNIST
+dataset. Logisticregressionhasawell-studiedconvexobjective,makingitsuitableforcomparison
+ofdifferentoptimizerswithoutworryingaboutlocalminimumissues.Thestepsizeαinourlogistic
+regressionexperimentsisadjustedby1/√tdecay,namelyα = α thatmatcheswithourtheorat-
+t √t
+icalpredictionfromsection4. Thelogisticregressionclassiﬁestheclasslabeldirectlyonthe784
+dimension image vectors. We compare Adam to accelerated SGD with Nesterov momentum and
+Adagradusingminibatchsizeof128.AccordingtoFigure1,wefoundthattheAdamyieldssimilar
+convergenceasSGDwithmomentumandbothconvergefasterthanAdagrad.
+As discussed in (Duchi et al., 2011), Adagrad can efﬁciently deal with sparse features and gradi-
+entsasoneofitsmaintheoreticalresultswhereasSGDislowatlearningrarefeatures. Adamwith
+1/√tdecayonitsstepsizeshouldtheoraticallymatchtheperformanceofAdagrad.Weexaminethe
+sparsefeatureproblemusingIMDBmoviereviewdatasetfrom(Maasetal.,2011). Wepre-process
+theIMDBmoviereviewsintobag-of-words(BoW)featurevectorsincludingtheﬁrst10,000most
+frequentwords.The10,000dimensionBoWfeaturevectorforeachreviewishighlysparse.Assug-
+gestedin(Wang&Manning,2013),50%dropoutnoisecanbeappliedtotheBoWfeaturesduring
+5PublishedasaconferencepaperatICLR2015
+MNIST Logistic Regression IMDB BoW feature Logistic Regression
+0.7 0.50
+AdaGrad Adagrad+dropout
+SGDNesterov
+RMSProp+dropout
+0.6 Adam 0.45 SGDNesterov+dropout
+Adam+dropout
+0.40
+training cost00..45 training cost0.35
+0.30
+0.3
+0.25
+0.20 5 10 15 20 25 30 35 40 45 0.200 20 40 60 80 100 120 140 160
+iterations over entire dataset iterations over entire dataset
+Figure1: LogisticregressiontrainingnegativeloglikelihoodonMNISTimagesandIMDBmovie
+reviewswith10,000bag-of-words(BoW)featurevectors.
+training to prevent over-ﬁtting. In ﬁgure 1, Adagrad outperforms SGD with Nesterov momentum
+byalargemarginbothwithandwithoutdropoutnoise. AdamconvergesasfastasAdagrad. The
+empiricalperformanceofAdamisconsistentwithourtheoreticalﬁndingsinsections2and4. Sim-
+ilartoAdagrad,Adamcantakeadvantageofsparsefeaturesandobtainfasterconvergenceratethan
+normalSGDwithmomentum.
+6.2 EXPERIMENT: MULTI-LAYERNEURALNETWORKS
+Multi-layer neural network are powerful models with non-convex objective functions. Although
+ourconvergenceanalysisdoesnotapplytonon-convexproblems,weempiricallyfoundthatAdam
+oftenoutperformsothermethodsinsuchcases.Inourexperiments,wemademodelchoicesthatare
+consistentwithpreviouspublicationsinthearea;aneuralnetworkmodelwithtwofullyconnected
+hidden layers with 1000 hidden units each and ReLU activation are used for this experiment with
+minibatchsizeof128.
+First, we study different optimizers using the standard deterministic cross-entropy objective func-
+tion with L weight decay on the parameters to prevent over-ﬁtting. The sum-of-functions (SFO)
+2
+method(Sohl-Dicksteinetal.,2014)isarecentlyproposedquasi-Newtonmethodthatworkswith
+minibatches of data and has shown good performance on optimization of multi-layer neural net-
+works. We used their implementation and compared with Adam to train such models. Figure 2
+shows that Adam makes faster progress in terms of both the number of iterations and wall-clock
+time. Due to the cost of updating curvature information, SFO is 5-10x slower per iteration com-
+paredtoAdam,andhasamemoryrequirementthatislinearinthenumberminibatches.
+Stochasticregularizationmethods,suchasdropout,areaneffectivewaytopreventover-ﬁttingand
+oftenusedinpracticeduetotheirsimplicity. SFOassumesdeterministicsubfunctions,andindeed
+failedtoconvergeoncostfunctionswithstochasticregularization. Wecomparetheeffectivenessof
+Adam to other stochastic ﬁrst order methods on multi-layer neural networks trained with dropout
+noise. Figure2showsourresults;Adamshowsbetterconvergencethanothermethods.
+6.3 EXPERIMENT: CONVOLUTIONALNEURALNETWORKS
+Convolutionalneuralnetworks(CNNs)withseverallayersofconvolution, poolingandnon-linear
+unitshaveshownconsiderablesuccessincomputervisiontasks.Unlikemostfullyconnectedneural
+nets, weight sharing in CNNs results in vastly different gradients in different layers. A smaller
+learningratefortheconvolutionlayersisoftenusedinpracticewhenapplyingSGD.Weshowthe
+effectiveness of Adam in deep CNNs. Our CNN architecture has three alternating stages of 5x5
+convolutionﬁltersand3x3maxpoolingwithstrideof2thatarefollowedbyafullyconnectedlayer
+of1000rectiﬁedlinearhiddenunits(ReLU’s).Theinputimagearepre-processedbywhitening,and
+6PublishedasaconferencepaperatICLR2015
+10-1 MNIST Multilayer Neural Network + dropout
+AdaGrad
+RMSProp
+SGDNesterov
+AdaDelta
+Adam
+training cost
+10-2
+0 50 100 150 200
+iterations over entire dataset
+(a) (b)
+Figure 2: Training of multilayer neural networks on MNIST images. (a) Neural networks using
+dropoutstochasticregularization.(b)Neuralnetworkswithdeterministiccostfunction.Wecompare
+withthesum-of-functions(SFO)optimizer(Sohl-Dicksteinetal.,2014)
+CIFAR10 ConvNet First 3 Epoches CIFAR10 ConvNet
+3.0
+AdaGrad AdaGrad
+AdaGrad+dropout 102 AdaGrad+dropout
+SGDNesterov SGDNesterov
+2.5 SGDNesterov+dropout 101 SGDNesterov+dropout
+Adam Adam
+Adam+dropout Adam+dropout
+training cost21..05 training cost1100-01
+10-2
+1.0
+10-3
+0.50.0 0.5 1.0 1.5 2.0 2.5 3.0 10-40 5 10 15 20 25 30 35 40 45
+iterations over entire dataset iterations over entire dataset
+Figure3:Convolutionalneuralnetworkstrainingcost.(left)Trainingcostfortheﬁrstthreeepochs.
+(right)Trainingcostover45epochs. CIFAR-10withc64-c64-c128-1000architecture.
+dropoutnoiseisappliedtotheinputlayerandfullyconnectedlayer. Theminibatchsizeisalsoset
+to128similartopreviousexperiments.
+Interestingly,althoughbothAdamandAdagradmakerapidprogressloweringthecostintheinitial
+stage of the training, shown in Figure 3 (left), Adam and SGD eventually converge considerably
+fasterthanAdagradforCNNsshowninFigure3(right). Wenoticethesecondmomentestimatev
+t
+vanishestozerosafterafewepochsandisdominatedbythe(cid:15)inalgorithm1. Thesecondmoment
+estimateisthereforeapoorapproximationtothegeometryofthecostfunctioninCNNscomparing
+b
+to fully connected network from Section 6.2. Whereas, reducing the minibatch variance through
+theﬁrstmomentismoreimportantinCNNsandcontributestothespeed-up. Asaresult,Adagrad
+converges much slower than others in this particular experiment. Though Adam shows marginal
+improvementoverSGDwithmomentum,itadaptslearningratescalefordifferentlayersinsteadof
+handpickingmanuallyasinSGD.
+7PublishedasaconferencepaperatICLR2015
+β2=0.99 β2=0.999 β2=0.9999 β2=0.99 β2=0.999 β2=0.9999
+β1=0
+s
+β1=0.9 Los
+log10(α)
+(a) after 10 epochs (b) after 100 epochs
+Figure 4: Effect of bias-correction terms (red line) versus no bias correction terms (green line)
+after10epochs(left)and100epochs(right)ontheloss(y-axes)whenlearningaVariationalAuto-
+Encoder(VAE)(Kingma&Welling,2013),fordifferentsettingsofstepsizeα(x-axes)andhyper-
+parametersβ andβ .
+1 2
+6.4 EXPERIMENT: BIAS-CORRECTIONTERM
+We also empirically evaluate the effect of the bias correction terms explained in sections 2 and 3.
+Discussedinsection5,removalofthebiascorrectiontermsresultsinaversionofRMSProp(Tiele-
+man & Hinton, 2012) with momentum. We vary the β and β when training a variational auto-
+1 2
+encoder (VAE) with the same architecture as in (Kingma & Welling, 2013) with a single hidden
+layer with 500 hidden units with softplus nonlinearities and a 50-dimensional spherical Gaussian
+latent variable. We iterated over a broad range of hyper-parameter choices, i.e. β [0,0.9] and
+1
+∈
+β [0.99,0.999,0.9999],andlog (α) [ 5,..., 1].Valuesofβ closeto1,requiredforrobust-
+2 ∈ 10 ∈ − − 2
+nesstosparsegradients,resultsinlargerinitializationbias;thereforeweexpectthebiascorrection
+termisimportantinsuchcasesofslowdecay,preventinganadverseeffectonoptimization.
+InFigure4,valuesβ closeto1indeedleadtoinstabilitiesintrainingwhennobiascorrectionterm
+2
+waspresent,especiallyatﬁrstfewepochsofthetraining.Thebestresultswereachievedwithsmall
+valuesof(1 β )andbiascorrection;thiswasmoreapparenttowardstheendofoptimizationwhen
+2
+−
+gradientstendstobecomesparserashiddenunitsspecializetospeciﬁcpatterns.Insummary,Adam
+performedequalorbetterthanRMSProp,regardlessofhyper-parametersetting.
+7 EXTENSIONS
+7.1 ADAMAX
+InAdam,theupdateruleforindividualweightsistoscaletheirgradientsinverselyproportionaltoa
+(scaled)L2normoftheirindividualcurrentandpastgradients.WecangeneralizetheL2normbased
+updateruletoaLp normbasedupdaterule. Suchvariantsbecomenumericallyunstableforlarge
+p. However, in the special case where we let p , a surprisingly simple and stable algorithm
+emerges;seealgorithm2. We’llnowderivethea→lgor∞ithm. Let,incaseoftheLpnorm,thestepsize
+attimetbeinverselyproportionaltov1/p,where:
+t
+v =βpv +(1 βp)g p (6)
+t 2 t−1 − 2 | t|
+t
+=(1−β2p) β2p(t−i)·|gi|p (7)
+i=1
+X
+8PublishedasaconferencepaperatICLR2015
+Algorithm2:AdaMax, avariantofAdambasedontheinﬁnitynorm. Seesection7.1fordetails.
+Good default settings for the tested machine learning problems are α = 0.002, β = 0.9 and
+1
+β =0.999. Withβt wedenoteβ tothepowert. Here,(α/(1 βt))isthelearningratewiththe
+2 1 1 − 1
+bias-correctiontermfortheﬁrstmoment. Alloperationsonvectorsareelement-wise.
+Require: α: Stepsize
+Require: β1,β2 [0,1): Exponentialdecayrates
+∈
+Require: f(θ): Stochasticobjectivefunctionwithparametersθ
+Require: θ0: Initialparametervector
+m 0(Initialize1stmomentvector)
+0
+←
+u 0(Initializetheexponentiallyweightedinﬁnitynorm)
+0
+←
+t 0(Initializetimestep)
+←
+whileθtnotconvergeddo
+t t+1
+←
+g f (θ )(Getgradientsw.r.t. stochasticobjectiveattimestept)
+t θ t t 1
+m←∇β m− +(1 β ) g (Updatebiasedﬁrstmomentestimate)
+t 1 t 1 1 t
+u ←max·(β −u , −g )(U·pdatetheexponentiallyweightedinﬁnitynorm)
+t 2 t 1 t
+θ ←θ (α·/(−1 |βt|)) m /u (Updateparameters)
+t ← t−1− − 1 · t t
+endwhile
+return θt(Resultingparameters)
+Notethatthedecaytermishereequivalentlyparameterisedasβp insteadofβ . Nowletp ,
+2 2 → ∞
+anddeﬁneu =lim (v )1/p,then:
+t p t
+→∞
+t 1/p
+ut =plim(vt)1/p =plim  (1−β2p) β2p(t−i)·|gi|p! (8)
+→∞ →∞ i=1
+X
+t 1/p
+=plim(1−β2p)1/p  β2p(t−i)·|gi|p! (9)
+→∞ i=1
+X
+t 1/p
+p
+=plim   β2(t−i)·|gi| ! (10)
+→∞ Xi=1(cid:16) (cid:17)
+=max β2t−1|g1|,β2t−2|g2|,...,β2|gt−1|,|gt| (11)
+Whichcorrespondstotheremarkablysimp(cid:0)lerecursiveformula: (cid:1)
+u =max(β u , g ) (12)
+t 2 t 1 t
+· − | |
+withinitialvalueu =0.Notethat,convenientlyenough,wedon’tneedtocorrectforinitialization
+0
+bias in this case. Also note that the magnitude of parameter updates has a simpler bound with
+AdaMaxthanAdam,namely: ∆ α.
+t
+| |≤
+7.2 TEMPORALAVERAGING
+Sincethelastiterateisnoisyduetostochasticapproximation,bettergeneralizationperformanceis
+often achieved by averaging. Previously in Moulines & Bach (2011), Polyak-Ruppert averaging
+(Polyak&Juditsky,1992;Ruppert,1988)hasbeenshowntoimprovetheconvergenceofstandard
+SGD,whereθ¯ = 1 n θ .Alternatively,anexponentialmovingaverageovertheparameterscan
+t t k=1 k
+beused, givinghigherweighttomorerecentparametervalues. Thiscanbetriviallyimplemented
+byaddingonelinetoPtheinnerloopofalgorithms1and2:θ¯ β θ¯ +(1 β )θ ,withθ¯ =0.
+t 2 t 1 2 t 0
+Initalizationbiascanagainbecorrectedbytheestimatorθ =←θ¯/(1· −βt). −
+t t − 2
+b
+8 CONCLUSION
+Wehaveintroducedasimpleandcomputationallyefﬁcientalgorithmforgradient-basedoptimiza-
+tionofstochasticobjectivefunctions.Ourmethodisaimedtowardsmachinelearningproblemswith
+9PublishedasaconferencepaperatICLR2015
+largedatasetsand/orhigh-dimensionalparameterspaces. Themethodcombinestheadvantagesof
+two recently popular optimization methods: the ability of AdaGrad to deal with sparse gradients,
+andtheabilityofRMSProptodealwithnon-stationaryobjectives. Themethodisstraightforward
+toimplementandrequireslittlememory. Theexperimentsconﬁrmtheanalysisontherateofcon-
+vergenceinconvexproblems.Overall,wefoundAdamtoberobustandwell-suitedtoawiderange
+ofnon-convexoptimizationproblemsintheﬁeldmachinelearning.
+9 ACKNOWLEDGMENTS
+ThispaperwouldprobablynothaveexistedwithoutthesupportofGoogleDeepmind. Wewould
+liketogivespecialthankstoIvoDanihelka,andTomSchaulforcoiningthenameAdam.Thanksto
+KaiFanfromDukeUniversityforspottinganerrorintheoriginalAdaMaxderivation.Experiments
+inthisworkwerepartlycarriedoutontheDutchnationale-infrastructurewiththesupportofSURF
+Foundation. DiederikKingmaissupportedbytheGoogleEuropeanDoctorateFellowshipinDeep
+Learning.
+REFERENCES
+Amari,Shun-Ichi. Naturalgradientworksefﬁcientlyinlearning. Neuralcomputation,10(2):251–276,1998.
+Deng,Li,Li,Jinyu,Huang,Jui-Ting,Yao,Kaisheng,Yu,Dong,Seide,Frank,Seltzer,Michael,Zweig,Geoff,
+He,Xiaodong,Williams,Jason,etal. Recentadvancesindeeplearningforspeechresearchatmicrosoft.
+ICASSP2013,2013.
+Duchi,John,Hazan,Elad,andSinger,Yoram.Adaptivesubgradientmethodsforonlinelearningandstochastic
+optimization. TheJournalofMachineLearningResearch,12:2121–2159,2011.
+Graves,Alex. Generatingsequenceswithrecurrentneuralnetworks. arXivpreprintarXiv:1308.0850,2013.
+Graves,Alex,Mohamed,Abdel-rahman,andHinton,Geoffrey. Speechrecognitionwithdeeprecurrentneural
+networks. InAcoustics,SpeechandSignalProcessing(ICASSP),2013IEEEInternationalConferenceon,
+pp.6645–6649.IEEE,2013.
+Hinton,G.E.andSalakhutdinov,R.R.Reducingthedimensionalityofdatawithneuralnetworks.Science,313
+(5786):504–507,2006.
+Hinton, Geoffrey, Deng, Li, Yu, Dong, Dahl, GeorgeE, Mohamed, Abdel-rahman, Jaitly, Navdeep, Senior,
+Andrew,Vanhoucke,Vincent,Nguyen,Patrick,Sainath,TaraN,etal. Deepneuralnetworksforacoustic
+modelinginspeechrecognition: Thesharedviewsoffourresearchgroups. SignalProcessingMagazine,
+IEEE,29(6):82–97,2012a.
+Hinton,GeoffreyE,Srivastava,Nitish,Krizhevsky,Alex,Sutskever,Ilya,andSalakhutdinov,RuslanR. Im-
+provingneuralnetworksbypreventingco-adaptationoffeaturedetectors. arXivpreprintarXiv:1207.0580,
+2012b.
+Kingma,DiederikPandWelling,Max.Auto-EncodingVariationalBayes.InThe2ndInternationalConference
+onLearningRepresentations(ICLR),2013.
+Krizhevsky, Alex, Sutskever, Ilya, andHinton, GeoffreyE. Imagenetclassiﬁcationwithdeepconvolutional
+neuralnetworks. InAdvancesinneuralinformationprocessingsystems,pp.1097–1105,2012.
+Maas, Andrew L, Daly, Raymond E, Pham, Peter T, Huang, Dan, Ng, Andrew Y, and Potts, Christopher.
+Learningwordvectorsforsentimentanalysis.InProceedingsofthe49thAnnualMeetingoftheAssociation
+for Computational Linguistics: Human Language Technologies-Volume 1, pp. 142–150. Association for
+ComputationalLinguistics,2011.
+Moulines, Eric and Bach, Francis R. Non-asymptotic analysis of stochastic approximation algorithms for
+machinelearning. InAdvancesinNeuralInformationProcessingSystems,pp.451–459,2011.
+Pascanu, Razvan and Bengio, Yoshua. Revisiting natural gradient for deep networks. arXiv preprint
+arXiv:1301.3584,2013.
+Polyak,BorisTandJuditsky,AnatoliB.Accelerationofstochasticapproximationbyaveraging.SIAMJournal
+onControlandOptimization,30(4):838–855,1992.
+10PublishedasaconferencepaperatICLR2015
+Roux, Nicolas L and Fitzgibbon, Andrew W. A fast natural newton method. In Proceedings of the 27th
+InternationalConferenceonMachineLearning(ICML-10),pp.623–630,2010.
+Ruppert, David. Efﬁcient estimations from a slowly convergent robbins-monro process. Technical report,
+CornellUniversityOperationsResearchandIndustrialEngineering,1988.
+Schaul,Tom,Zhang,Sixin,andLeCun,Yann. Nomorepeskylearningrates. arXivpreprintarXiv:1206.1106,
+2012.
+Sohl-Dickstein, Jascha, Poole, Ben, andGanguli, Surya. Fastlarge-scaleoptimizationbyunifyingstochas-
+ticgradientandquasi-newtonmethods. InProceedingsofthe31stInternationalConferenceonMachine
+Learning(ICML-14),pp.604–612,2014.
+Sutskever,Ilya,Martens,James,Dahl,George,andHinton,Geoffrey. Ontheimportanceofinitializationand
+momentumindeeplearning. InProceedingsofthe30thInternationalConferenceonMachineLearning
+(ICML-13),pp.1139–1147,2013.
+Tieleman,T.andHinton,G. Lecture6.5-RMSProp,COURSERA:NeuralNetworksforMachineLearning.
+Technicalreport,2012.
+Wang,SidaandManning,Christopher.Fastdropouttraining.InProceedingsofthe30thInternationalConfer-
+enceonMachineLearning(ICML-13),pp.118–126,2013.
+Zeiler,MatthewD. Adadelta:Anadaptivelearningratemethod. arXivpreprintarXiv:1212.5701,2012.
+Zinkevich,Martin. Onlineconvexprogrammingandgeneralizedinﬁnitesimalgradientascent. 2003.
+11PublishedasaconferencepaperatICLR2015
+10 APPENDIX
+10.1 CONVERGENCEPROOF
+Deﬁnition10.1. Afunctionf :Rd Risconvexifforallx,y Rd,forallλ [0,1],
+→ ∈ ∈
+λf(x)+(1 λ)f(y) f(λx+(1 λ)y)
+− ≥ −
+Also,noticethataconvexfunctioncanbelowerboundedbyahyperplaneatitstangent.
+Lemma10.2. Ifafunctionf :Rd Risconvex,thenforallx,y Rd,
+→ ∈
+f(y) f(x)+ f(x)T(y x)
+≥ ∇ −
+The above lemma can be used to upper bound the regret and our proof for the main theorem is
+constructedbysubstitutingthehyperplanewiththeAdamupdaterules.
+Thefollowingtwolemmasareusedtosupportourmaintheorem.Wealsousesomedeﬁnitionssim-
+plifyournotation,wheregt , ft(θt)andgt,iastheithelement. Wedeﬁneg1:t,i Rtasavector
+∇ ∈
+thatcontainstheithdimensionofthegradientsoveralliterationstillt,g =[g ,g , ,g ]
+1:t,i 1,i 2,i t,i
+···
+Lemma10.3. Letgt = ft(θt)andg1:t bedeﬁnedasaboveandbounded, gt 2 G, gt
+G . Then, ∇ k k ≤ k k∞ ≤
+∞
+T g2
+t,i 2G g
+1:T,i 2
+s t ≤ ∞k k
+t=1
+X
+Proof. WewillprovetheinequalityusinginductionoverT.
+ThebasecaseforT =1,wehave g2 2G g .
+1,i ≤ ∞k 1,ik2
+q
+Fortheinductivestep,
+T gt2,i =T−1 gt2,i + gT2,i
+s t s t s T
+t=1 t=1
+X X
+g2
+2G g + T,i
+1:T 1,i 2
+≤ ∞k − k s T
+g2
+=2G g 2 g2 + T,i
+∞ k 1:T,ik2− T s T
+q
+From, g 2 g2 + gT4,i g 2 g2 , we can take square root of both side and
+k 1:T,ik2 − T,i 4kg1:T,ik22 ≥ k 1:T,ik2 − T,i
+have,
+g2
+g 2 g2 g T,i
+k 1:T,ik2− T,i ≤k 1:T,ik2− 2 g
+1:T,i 2
+q k k
+g2
+g T,i
+1:T,i 2
+≤k k − 2 TG2
+∞
+p
+Rearrangetheinequalityandsubstitutethe g 2 g2 term,
+k 1:T,ik2− T,i
+q
+g2
+G g 2 g2 + T,i 2G g
+∞ k 1:T,ik2− T s T ≤ ∞k 1:T,ik2
+q
+12PublishedasaconferencepaperatICLR2015
+Lemma10.4. Letγ , √ββ122. Forβ1,β2 ∈[0,1)thatsatisfy √ββ122 <1andboundedgt,kgtk2 ≤G,
+g G ,thefollowinginequalityholds
+t
+k k∞ ≤ ∞
+T m2 2 1
+t,i g
+t=1 tvt,i ≤ 1−γ√1−β2k 1:T,ik2
+X b
+p
+Proof. Undertheassumption, √1−β2tb 1 . Wecanexpandthelastterminthesummation
+(1−β1t)2 ≤ (1−β1)2
+usingtheupdaterulesinAlgorithm1,
+T m2t,i =T−1 m2t,i + 1−β2T ( Tk=1(1−β1)β1T−kgk,i)2
+Xt=1 btvt,i Xt=1 btvt,i (p1−β1T)2 PT Tj=1(1−β2)β2T−jgj2,i
+p b T−1pm2tb,i + 1−β2T qT PT((1−β1)β1T−kgk,i)2
+≤ Xt=1 btvt,i (p1−β1T)2 kX=1 T Tj=1(1−β2)β2T−jgj2,i
+T−1pm2tb,i + 1−β2T T qT((1P−β1)β1T−kgk,i)2
+≤ Xt=1 btvt,i (p1−β1T)2 kX=1 T(1−β2)β2T−kgk2,i
+T−1pm2tb,i + 1−β2T (1−qβ1)2 T T β12 T−k g
+≤ Xt=1 btvt,i (p1−β1T)2 T(1−β2)kX=1 (cid:18)√β2(cid:19) k k,ik2
+T−1pm2tb,i + T p T γT−k gk,i 2
+≤ tv T(1 β ) k k
+Xt=1 b t,i − 2 kX=1
+p p
+b
+Similarly,wecanupperboundtherestofthetermsinthesummation.
+T m2t,i T kgt,ik2 T−ttγj
+tv ≤ t(1 β )
+Xt=1 b t,i Xt=1 − 2 Xj=0
+p T p g T
+b k t,ik2 tγj
+≤ t(1 β )
+Xt=1 − 2 Xj=0
+p
+Forγ <1,usingtheupperboundonthearithmetic-geometricseries, tγt < 1 :
+t (1 γ)2
+−
+T T TP
+g 1 g
+k t,ik2 tγj k t,ik2
+Xt=1 t(1−β2)Xj=0 ≤ (1−γ)2√1−β2 Xt=1 √t
+p
+ApplyLemma10.3,
+T m2 2G
+t=1 tvt,ti,i ≤ (1−γ)2√∞1−β2kg1:T,ik2
+X b
+p
+b
+To simplify the notation, we deﬁne γ , β12 . Intuitively, our following theorem holds when the
+√β2
+learningrateαtisdecayingatarateoft−12 andﬁrstmomentrunningaveragecoefﬁcientβ1,tdecay
+exponentiallywithλ,thatistypicallycloseto1,e.g. 1 10 8.
+−
+−
+Theorem10.5. Assumethatthefunctionfthasboundedgradients, ft(θ) 2 G, ft(θ)
+G forallθ Rdanddistancebetweenanyθ generatedbyAdamk∇isbounkded≤, θ k∇θ k∞D≤,
+t n m 2
+∞ ∈ k − k ≤
+13PublishedasaconferencepaperatICLR2015
+θ θ D foranym,n 1,...,T ,andβ ,β [0,1)satisfy β12 < 1. Letα = α
+k m− nk∞ ≤ ∞ ∈ { } 1 2 ∈ √β2 t √t
+andβ =β λt 1,λ (0,1). Adamachievesthefollowingguarantee,forallT 1.
+1,t 1 −
+∈ ≥
+D2 d α(β +1)G d d D2 G √1 β
+R(T)≤ 2α(1 β ) TvT,i+(1 β )√11 β (∞1 γ)2 kg1:T,ik2+ 2α(∞1 ∞β )(1− λ2)2
+− 1 i=1 − 1 − 2 − i=1 i=1 − 1 −
+Xp X X
+b
+Proof. UsingLemma10.2,wehave,
+d
+ft(θt)−ft(θ∗)≤gtT(θt−θ∗)= gt,i(θt,i−θ,∗i)
+i=1
+X
+Fromtheupdaterulespresentedinalgorithm1,
+θ =θ α m / v
+t+1 t t t t
+−
+=θ αt pβ1,tm + (1−β1,t)g
+t− 1−bβ1t(cid:18)b√vt t−1 √vt t(cid:19)
+Wefocusontheith dimensionoftheparametervectorθ Rd. Subtractthescalarθ andsquare
+b t ∈ b ,∗i
+bothsidesoftheaboveupdaterule,wehave,
+2α β β ) m
+(θt+1,i−θ,∗i)2 =(θt,i−θ,∗i)2− 1−βt1t( 1v,tt,imt−1,i+(1− 1v,tt,igt,i)(θt,i−θ,∗i)+αt2( vt,ti,i)2
+b
+p p p
+WecanrearrangetheaboveequationandusbeYoung’sinequality,abb a2/2+b2/2.Also,itcbanbe
+≤
+shownthat vt,i = tj=1(1−β2)β2t−jgj2,i/ 1−β2t ≤kg1:t,ik2andβ1,t ≤β1. Then
+p qP p
+b (1 βt) v
+gt,i(θt,i−θ,∗i)=2α−(11 β t,)i (θt,i−θ,∗t)2−(θt+1,i−θ,∗i)2
+t −p1,t (cid:18) (cid:19)
+b 1
+β v4 m α (1 βt) v m
++ (1−1β,t1,t)√tα−t1−,i1(θ,∗i−θt,i)√αt−1 vt14t−11,,ii + t2(1−−1β1p,t)t,i( vt,ti,i)2
+b − b b
+1 β p
+≤2αt(β1−αβ1)(cid:18)m(θ2t,i−θ,∗t)2−α(θt+1,im−2θb,∗i)2(cid:19)pvt,i+ 2αt−1(11,−t β1,t)b(θ,∗i−θt,i)2pvt−1,i
++ 1 t−1 t−1,i + t t,i b b
+2(1−β1) vt−1,i 2(1−β1) bvt,i
+p p
+WeapplyLemma10.4totheaboveinequalityandderivetheregretboundbysummingacrossall
+b b
+the dimensions for i 1,...,d in the upper bound of f (θ ) f (θ ) and the sequence of convex
+t t t ∗
+∈ −
+functionsfort 1,...,T:
+∈
+d 1 d T 1 v v
+R(T)≤ 2α (1 β )(θ1,i−θ,∗i)2 v1,i+ 2(1 β )(θt,i−θ,∗i)2( αt,i − αt−1,i)
+Xi=1 1 − 1 p Xi=1Xt=2 − 1 pbt pbt−1
+β αG db αG d
++ (1 β )√11 β∞(1 γ)2 kg1:T,ik2+ (1 β )√1 ∞β (1 γ)2 kg1:T,ik2
+− 1 − 2 − i=1 − 1 − 2 − i=1
+X X
+d T
+β
++ 2α (11,tβ )(θ,∗i−θt,i)2 vt,i
+t 1,t
+i=1t=1 −
+XX p
+b
+14PublishedasaconferencepaperatICLR2015
+Fromtheassumption, θ θ D, θ θ D ,wehave:
+t ∗ 2 m n
+k − k ≤ k − k∞ ≤ ∞
+D2 d α(1+β )G d D2 d t β
+R(T)≤2α(1 β ) TvT,i+ (1 β )√1 1β (∞1 γ)2 kg1:T,ik2+ 2α∞ (1 1β,t ) tvt,i
+− 1 i=1 − 1 − 2 − i=1 i=1t=1 − 1,t
+Xp X XX p
+D2 d b α(1+β )G d b
+≤2α(1 β ) TvT,i+ (1 β )√1 1β (∞1 γ)2 kg1:T,ik2
+− 1 i=1 − 1 − 2 − i=1
+Xp X
+D2 G √1 β bd t β
++ ∞ ∞ − 2 1,t √t
+2α (1 β )
+1,t
+i=1t=1 −
+XX
+Wecanusearithmeticgeometricseriesupperboundforthelastterm:
+t t
+β 1
+1,t √t λt−1√t
+(1 β ) ≤ (1 β )
+1,t 1
+t=1 − t=1 −
+X X
+t
+1
+λt−1t
+≤ (1 β )
+1
+t=1 −
+X
+1
+≤ (1 β )(1 λ)2
+1
+− −
+Therefore,wehavethefollowingregretbound:
+D2 d α(1+β )G d d D2 G √1 β
+R(T)≤2α(1 β ) TvT,i+ (1 β )√1 1β (∞1 γ)2 kg1:T,ik2+ 2∞αβ∞(1 λ−)22
+− 1 i=1 − 1 − 2 − i=1 i=1 1 −
+Xp X X
+b
+15
